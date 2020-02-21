@@ -1,0 +1,41 @@
+package main
+
+import (
+	"log"
+)
+
+// EncryptionAtRestAzure Azure implementation of the encryption in flight for Object Storage feature
+type EncryptionAtRestAzure struct {
+}
+
+func (state *EncryptionAtRestAzure) setup() {
+}
+
+func (state *EncryptionAtRestAzure) teardown() {
+}
+
+func (state *EncryptionAtRestAzure) policyOrRuleAvailable() error {
+	// It is available
+	log.Printf("Azure Storage account is encrypted by default and cannot be turned off. No test to run. Checking Azure Policy. (Unless customise this test to check for specific key usage.")
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) checkPolicyOrRuleAssignment() error {
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) policyOrRuleAssigned() error {
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) prepareToCreateContainer() error {
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) createContainerWithEncryptionOption(encryptionOption string) error {
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) createResult(result string) error {
+	return nil
+}
