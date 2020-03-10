@@ -6,13 +6,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/colors"
-	"github.com/xeipuuv/gojsonschema"
 	"io/ioutil"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 const resources = "../../../../terraform/resources/azure_policy"
@@ -40,15 +41,15 @@ func TestMain(m *testing.M) {
 	os.Exit(status)
 }
 
-func testJsonPresent() error {
-	files := getJsonPolicies()
+func testJSONPresent() error {
+	files := getJSONPolicies()
 	if len(files) == 0 {
 		return errors.New("there are no JSON files to test")
 	}
 	return nil
 }
 
-func getJsonPolicies() []os.FileInfo {
+func getJSONPolicies() []os.FileInfo {
 	f, err := ioutil.ReadDir(resources)
 	if err != nil {
 		panic("Failed to read or open JSON policy directory")
@@ -56,8 +57,8 @@ func getJsonPolicies() []os.FileInfo {
 	return f
 }
 
-func testValidJson() error {
-	files := getJsonPolicies()
+func testValidJSON() error {
+	files := getJSONPolicies()
 	for _, f := range files {
 
 		fb, err := ioutil.ReadFile(resources + string(os.PathSeparator) + f.Name())
@@ -76,9 +77,9 @@ func testValidJson() error {
 	return nil
 }
 
-func testValidSchemaJson() error {
+func testValidSchemaJSON() error {
 
-	files := getJsonPolicies()
+	files := getJSONPolicies()
 	var success error = nil
 	for _, f := range files {
 
@@ -89,7 +90,7 @@ func testValidSchemaJson() error {
 
 		result, err := gojsonschema.Validate(schemaLoader, documentLoader)
 		if err != nil {
-			log.Printf("Cannot validate %v due to %v", f.Name(), err)
+			log.Printf("[ERROR] Cannot validate %v due to %v", f.Name(), err)
 			return err
 		}
 
@@ -104,7 +105,7 @@ func testValidSchemaJson() error {
 }
 
 func FeatureContext(s *godog.Suite) {
-	s.Step(`^a directory of Azure Policy files in JSON format`, testJsonPresent)
-	s.Step(`^the documents must be valid JSON`, testValidJson)
-	s.Step(`^the JSON must be valid against the Microsoft schema`, testValidSchemaJson)
+	s.Step(`^a directory of Azure Policy files in JSON format`, testJSONPresent)
+	s.Step(`^the documents must be valid JSON`, testValidJSON)
+	s.Step(`^the JSON must be valid against the Microsoft schema`, testValidSchemaJSON)
 }

@@ -12,30 +12,15 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
-// Vnets
-
-func getVnetClient(subscriptionID string) network.VirtualNetworksClient {
-	vnetClient := network.NewVirtualNetworksClient(subscriptionID)
-
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		vnetClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return vnetClient
-}
-
-// CreateVirtualNetwork creates a virtual network
-func CreateVirtualNetwork(ctx context.Context, vnetName string) (vnet network.VirtualNetwork, err error) {
-	vnetClient := getVnetClient(azureutil.GetAzureSubscriptionID())
-	future, err := vnetClient.CreateOrUpdate(
+// CreateVirtualNetwork creates a Virtual Network with CIDR 10.0.0.0/8  in the Subscription configured by environment variable AZURE_SUBSCRIPTION_ID.
+func CreateVirtualNetwork(ctx context.Context, name string) (vnet network.VirtualNetwork, err error) {
+	c := vnetClient()
+	future, err := c.CreateOrUpdate(
 		ctx,
-		azureutil.GetAzureResourceGP(),
-		vnetName,
+		azureutil.ResourceGroup(),
+		name,
 		network.VirtualNetwork{
-			Location: to.StringPtr(azureutil.GetAzureLocation()),
+			Location: to.StringPtr(azureutil.Location()),
 			VirtualNetworkPropertiesFormat: &network.VirtualNetworkPropertiesFormat{
 				AddressSpace: &network.AddressSpace{
 					AddressPrefixes: &[]string{"10.0.0.0/8"},
@@ -47,23 +32,23 @@ func CreateVirtualNetwork(ctx context.Context, vnetName string) (vnet network.Vi
 		return vnet, fmt.Errorf("cannot create virtual network: %v", err)
 	}
 
-	err = future.WaitForCompletionRef(ctx, vnetClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return vnet, fmt.Errorf("cannot get the vnet create or update future response: %v", err)
 	}
 
-	return future.Result(vnetClient)
+	return future.Result(c)
 }
 
-// CreateVirtualNetworkAndSubnets creates a virtual network with two subnets
-func CreateVirtualNetworkAndSubnets(ctx context.Context, vnetName, subnet1Name, subnet2Name string, tags map[string]*string) (vnet network.VirtualNetwork, err error) {
-	vnetClient := getVnetClient(azureutil.GetAzureSubscriptionID())
-	future, err := vnetClient.CreateOrUpdate(
+// CreateVirtualNetworkAndSubnets creates a Virtual Network with CIDR 10.0.0.0/8 and Subnets 10.0.0.0/16 and 10.1.0.0/16 in the Subscription configured by environment variable AZURE_SUBSCRIPTION_ID.
+func CreateVirtualNetworkAndSubnets(ctx context.Context, name, subnet1Name, subnet2Name string, tags map[string]*string) (vnet network.VirtualNetwork, err error) {
+	c := vnetClient()
+	future, err := c.CreateOrUpdate(
 		ctx,
-		azureutil.GetAzureResourceGP(),
-		vnetName,
+		azureutil.ResourceGroup(),
+		name,
 		network.VirtualNetwork{
-			Location: to.StringPtr(azureutil.GetAzureLocation()),
+			Location: to.StringPtr(azureutil.Location()),
 			VirtualNetworkPropertiesFormat: &network.VirtualNetworkPropertiesFormat{
 				AddressSpace: &network.AddressSpace{
 					AddressPrefixes: &[]string{"10.0.0.0/8"},
@@ -90,22 +75,32 @@ func CreateVirtualNetworkAndSubnets(ctx context.Context, vnetName, subnet1Name, 
 		return vnet, fmt.Errorf("cannot create virtual network: %v", err)
 	}
 
-	err = future.WaitForCompletionRef(ctx, vnetClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return vnet, fmt.Errorf("cannot get the vnet create or update future response: %v", err)
 	}
 
-	return future.Result(vnetClient)
+	return future.Result(c)
 }
 
-// DeleteVirtualNetwork deletes a virtual network given an existing virtual network
-func DeleteVirtualNetwork(ctx context.Context, vnetName string) (result network.VirtualNetworksDeleteFuture, err error) {
-	vnetClient := getVnetClient(azureutil.GetAzureSubscriptionID())
-	return vnetClient.Delete(ctx, azureutil.GetAzureResourceGP(), vnetName)
+// DeleteVirtualNetwork deletes a Virtual Network by name in the Subscription configured by environment variable AZURE_SUBSCRIPTION_ID.
+func DeleteVirtualNetwork(ctx context.Context, name string) (network.VirtualNetworksDeleteFuture, error) {
+	vnetClient := vnetClient()
+	return vnetClient.Delete(ctx, azureutil.ResourceGroup(), name)
 }
 
-// ListAllVNetByResourceGroup return all the VNet of a given resource group within the given subscription ID
-func ListAllVNetByResourceGroup(ctx context.Context, subscriptionID, resourceGroup string) (result network.VirtualNetworkListResultIterator, err error) {
-	vnetClient := getVnetClient(subscriptionID)
-	return vnetClient.ListComplete(ctx, resourceGroup)
+// ListAllVNetByResourceGroup returns the VNets in the given Resource Group in the Subscription configured by environment variable AZURE_SUBSCRIPTION_ID.
+func ListAllVNetByResourceGroup(ctx context.Context, rgName string) (result network.VirtualNetworkListResultIterator, err error) {
+	return vnetClient().ListComplete(ctx, rgName)
+}
+
+func vnetClient() network.VirtualNetworksClient {
+	c := network.NewVirtualNetworksClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Virtual Network client: %v", err)
+	}
+	return c
 }

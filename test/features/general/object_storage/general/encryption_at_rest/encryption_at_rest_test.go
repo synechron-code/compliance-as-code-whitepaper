@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/colors"
+	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
 )
 
 const csp = "CSP"
@@ -48,13 +48,14 @@ func TestMain(m *testing.M) {
 func FeatureContext(s *godog.Suite) {
 	var state EncryptionAtRest
 
-	cspEnv := os.Getenv(csp)
-	if strings.EqualFold(cspEnv, "azure") {
+	cspEnv := strings.ToLower(os.Getenv(csp))
+	switch cspEnv {
+	case "azure":
 		state = &EncryptionAtRestAzure{}
-	} else if strings.EqualFold(cspEnv, "aws") {
+	case "aws":
 		state = &EncryptionAtRestAWS{}
-	} else {
-		log.Panicf("Environment variable %s is defined as \"%s\"", csp, cspEnv)
+	default:
+		log.Panicf("Environment variable CSP is defined as \"%s\"", cspEnv)
 	}
 
 	s.BeforeSuite(state.setup)

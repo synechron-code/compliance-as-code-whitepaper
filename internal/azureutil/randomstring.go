@@ -6,7 +6,6 @@ import (
 	"unsafe"
 )
 
-//const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const letterBytes = "abcdefghijklmnopqrstuvwxyz"
 const (
 	letterIdxBits = 6                    // 6 bits to represent a letter index
@@ -16,8 +15,8 @@ const (
 
 var src = rand.NewSource(time.Now().UnixNano())
 
-//RandStringBytesMaskImprSrcUnsafe generate a number of character randomly of a given n size
-func RandStringBytesMaskImprSrcUnsafe(n int) string {
+//RandString generates a pseudo-random number of characters of length n
+func RandString(n int) string {
 	b := make([]byte, n)
 	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {

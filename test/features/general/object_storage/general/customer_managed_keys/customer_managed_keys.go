@@ -1,6 +1,6 @@
 package main
 
-//main that hold all the variables and constant that's used by the test
+//main holds the variables and constants used by the tests
 func main() {
 
 }

@@ -7,21 +7,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/colors"
+	"citihub.com/compliance-as-code/internal/logfilter"
+	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
 )
 
-const csp = "CSP"
-
 // EncryptionInFlight is an interface. For each CSP specific implementation
-type AccessWhitelisting interface {
+type accessWhitelisting interface {
 	setup()
-	isCspCapable() error
+	cspSupportsWhitelisting() error
 	examineStorageContainer(containerName string) error
 	whitelistingIsConfigured() error
 	checkPolicyAssigned() error
-	prepareToCreateStorageContainer() error
-	createWithWhiteList(ipPrefix string) error
+	provisionStorageContainer() error
+	createWithWhitelist(ipPrefix string) error
 	creationWill(result string) error
 	teardown()
 }
@@ -47,25 +46,27 @@ func TestMain(m *testing.M) {
 }
 
 func FeatureContext(s *godog.Suite) {
-	var state AccessWhitelisting
+	logfilter.Setup()
+	var state accessWhitelisting
 
-	cspEnv := os.Getenv(csp)
-	if strings.EqualFold(cspEnv, "azure") {
-		state = &AccessWhitelistingAzure{}
-	} else if strings.EqualFold(cspEnv, "aws") {
-		state = &AccessWhitelistingAWS{}
-	} else {
-		log.Panicf("Environment variable %s is defined as \"%s\"", csp, cspEnv)
+	csp := strings.ToLower(os.Getenv("CSP"))
+	switch csp {
+	case "azure":
+		state = &accessWhitelistingAzure{}
+	case "aws":
+		state = &accessWhitelistingAWS{}
+	default:
+		log.Panicf("Cloud Provider '%s' not supported - set environment variable 'CSP'", csp)
 	}
 
 	s.BeforeSuite(state.setup)
 
-	s.Step(`^the CSP provides a whitelisting capability for Object Storage containers$`, state.isCspCapable)
+	s.Step(`^the CSP provides a whitelisting capability for Object Storage containers$`, state.cspSupportsWhitelisting)
 	s.Step(`^we examine the Object Storage container in environment variable "([^"]*)"$`, state.examineStorageContainer)
 	s.Step(`^whitelisting is configured with the given IP address range or an endpoint$`, state.whitelistingIsConfigured)
 	s.Step(`^security controls that Prevent Object Storage from being created without network source address whitelisting are applied$`, state.checkPolicyAssigned)
-	s.Step(`^we provision an Object Storage container$`, state.prepareToCreateStorageContainer)
-	s.Step(`^it is created with whitelisting entry "([^"]*)"$`, state.createWithWhiteList)
+	s.Step(`^we provision an Object Storage container$`, state.provisionStorageContainer)
+	s.Step(`^it is created with whitelisting entry "([^"]*)"$`, state.createWithWhitelist)
 	s.Step(`^creation will "([^"]*)"$`, state.creationWill)
 
 	s.AfterSuite(state.teardown)

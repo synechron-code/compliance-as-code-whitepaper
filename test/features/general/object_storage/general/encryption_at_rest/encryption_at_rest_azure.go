@@ -16,7 +16,7 @@ func (state *EncryptionAtRestAzure) teardown() {
 
 func (state *EncryptionAtRestAzure) policyOrRuleAvailable() error {
 	// It is available
-	log.Printf("Azure Storage account is encrypted by default and cannot be turned off. No test to run. Checking Azure Policy. (Unless customise this test to check for specific key usage.")
+	log.Printf("[DEBUG] Azure Storage account is encrypted by default and cannot be turned off. No test to run. Checking Azure Policy. (Unless customise this test to check for specific key usage.")
 	return nil
 }
 

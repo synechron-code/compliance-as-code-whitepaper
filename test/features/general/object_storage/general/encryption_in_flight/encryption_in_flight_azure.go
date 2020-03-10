@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"citihub.com/compliance-as-code/internal/azureutil"
+	"citihub.com/compliance-as-code/internal/azureutil/group"
 	"citihub.com/compliance-as-code/internal/azureutil/policy"
-	"citihub.com/compliance-as-code/internal/azureutil/resource"
 	"citihub.com/compliance-as-code/internal/azureutil/storage"
 	azurePolicy "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2019-01-01/policy"
 	azureStorage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-04-01/storage"
@@ -32,31 +32,31 @@ type EncryptionInFlightAzure struct {
 }
 
 func (state *EncryptionInFlightAzure) setup() {
-	log.Println("Setting up \"EncryptionInFlightAzure\"")
+	log.Println("[DEBUG] Setting up \"EncryptionInFlightAzure\"")
 	state.ctx = context.Background()
-	state.policyAssignmentMgmtGroup = os.Getenv(azureutil.EnvPolicyAssignmentManagementGroup)
+	state.policyAssignmentMgmtGroup = os.Getenv(azureutil.PolicyAssignmentManagementGroup)
 	if state.policyAssignmentMgmtGroup == "" {
-		log.Printf("'%v' environment variable is not defined. Policy assignment check against subscription", azureutil.EnvPolicyAssignmentManagementGroup)
+		log.Printf("[ERROR] '%v' environment variable is not defined. Policy assignment check against subscription", azureutil.PolicyAssignmentManagementGroup)
 	}
 
 	state.tags = map[string]*string{
-		"project": to.StringPtr("gitlab-CICD"),
+		"project": to.StringPtr("CICD"),
 		"env":     to.StringPtr("test"),
 		"tier":    to.StringPtr("internal"),
 	}
 
-	_, err := resource.CreateGroupWithTags(state.ctx, azureutil.GetAzureResourceGP(), state.tags)
+	_, err := group.CreateWithTags(state.ctx, azureutil.ResourceGroup(), state.tags)
 
 	if err != nil {
 		log.Fatalf("failed to create group: %v\n", err.Error())
 	}
-	log.Printf("Created Resource Group: %v", azureutil.GetAzureResourceGP())
+	log.Printf("[DEBUG] Created Resource Group: '%v'", azureutil.ResourceGroup())
 
 }
 
 func (state *EncryptionInFlightAzure) teardown() {
-	resource.Cleanup(state.ctx)
-	log.Println("Teardown completed")
+	group.Cleanup(state.ctx)
+	log.Println("[DEBUG] Teardown completed")
 }
 
 func (state *EncryptionInFlightAzure) securityControlsThatRestrictDataFromBeingUnencryptedInFlight() error {
@@ -64,17 +64,17 @@ func (state *EncryptionInFlightAzure) securityControlsThatRestrictDataFromBeingU
 	var aerr error
 	// Search assignment from Management Group instead of subscription
 	if state.policyAssignmentMgmtGroup != "" {
-		policyAssignment, aerr = policy.GetAssignmentByManagementGroup(state.ctx, state.policyAssignmentMgmtGroup, policyName)
+		policyAssignment, aerr = policy.AssignmentByManagementGroup(state.ctx, state.policyAssignmentMgmtGroup, policyName)
 	} else {
-		policyAssignment, aerr = policy.GetAssignmentBySubscription(state.ctx, azureutil.GetAzureSubscriptionID(), policyName)
+		policyAssignment, aerr = policy.AssignmentBySubscription(state.ctx, azureutil.SubscriptionID(), policyName)
 	}
 
 	if aerr != nil {
-		log.Printf("Get policy assignment error: %v", aerr)
+		log.Printf("[ERROR] Get policy assignment error: %v", aerr)
 		return aerr
 	}
 
-	log.Printf("Policy assignment check: %v [Step PASSED]", *policyAssignment.Name)
+	log.Printf("[DEBUG] Policy assignment check: %v [Step PASSED]", *policyAssignment.Name)
 	return nil
 }
 
@@ -102,51 +102,55 @@ func (state *EncryptionInFlightAzure) httpsAccessIs(arg1 string) error {
 }
 
 func (state *EncryptionInFlightAzure) creationWillWithAnErrorMatching(expectation, errDescription string) error {
-	accountName := azureutil.RandStringBytesMaskImprSrcUnsafe(5) + "storageac"
+	accountName := azureutil.RandString(5) + "storageac"
 
 	var err error
 
 	networkRuleSet := azureStorage.NetworkRuleSet{
 		DefaultAction: azureStorage.DefaultActionDeny,
+		IPRules:       &[]azureStorage.IPRule{},
 	}
 
 	// Both true take it as http option is try
 	if state.httpsOption && state.httpOption {
-		_, err = storage.CreateStorageAccountWithNetworkRuleSet(state.ctx, accountName,
-			azureutil.GetAzureResourceGP(), state.tags, false, &networkRuleSet)
+		log.Printf("[DEBUG] Creating Storage Account with HTTPS: %v", false)
+		_, err = storage.CreateWithNetworkRuleSet(state.ctx, accountName,
+			azureutil.ResourceGroup(), state.tags, false, &networkRuleSet)
 	} else if state.httpsOption {
-		_, err = storage.CreateStorageAccountWithNetworkRuleSet(state.ctx, accountName,
-			azureutil.GetAzureResourceGP(), state.tags, state.httpsOption, &networkRuleSet)
+		log.Printf("[DEBUG] Creating Storage Account with HTTPS: %v", state.httpsOption)
+		_, err = storage.CreateWithNetworkRuleSet(state.ctx, accountName,
+			azureutil.ResourceGroup(), state.tags, state.httpsOption, &networkRuleSet)
 	} else if state.httpOption {
-		_, err = storage.CreateStorageAccountWithNetworkRuleSet(state.ctx, accountName,
-			azureutil.GetAzureResourceGP(), state.tags, state.httpsOption, &networkRuleSet)
+		log.Printf("[DEBUG] Creating Storage Account with HTTPS: %v", state.httpsOption)
+		_, err = storage.CreateWithNetworkRuleSet(state.ctx, accountName,
+			azureutil.ResourceGroup(), state.tags, state.httpsOption, &networkRuleSet)
 	}
 
 	if expectation == "Fail" {
 
 		if err == nil {
-			return fmt.Errorf("Storage Account was created, but should not have been: policy is not working or incorrectly configured")
+			return fmt.Errorf("storage account was created, but should not have been: policy is not working or incorrectly configured")
 		}
 
 		detailedError := err.(autorest.DetailedError)
 		originalErr := detailedError.Original
 		detailed := originalErr.(*azure.ServiceError)
 
-		log.Printf("Detailed Error: %v", detailed)
-		
+		log.Printf("[DEBUG] Detailed Error: %v", detailed)
+
 		if strings.EqualFold(detailed.Code, "RequestDisallowedByPolicy") {
 			// Now check if it is the right policy
 			if strings.Contains(detailed.Message, policyName) {
-				log.Printf("Request was Disallowed By Policy: %v [Step PASSED]", policyName)
+				log.Printf("[DEBUG] Request was Disallowed By Policy: %v [Step PASSED]", policyName)
 				return nil
 			}
-			return fmt.Errorf("Storage Account was not created but blocked not by the right policy: %v", detailed.Message)
-		} 
-		
-		return fmt.Errorf("Storage Account was not created")
+			return fmt.Errorf("storage account was not created but blocked not by the right policy: %v", detailed.Message)
+		}
+
+		return fmt.Errorf("storage account was not created")
 	} else if expectation == "Succeed" {
 		if err != nil {
-			log.Printf("Unexpected failure in create storage ac [Step FAILED]")
+			log.Printf("[ERROR] Unexpected failure in create storage ac [Step FAILED]")
 			return err
 		}
 		return nil
@@ -155,29 +159,22 @@ func (state *EncryptionInFlightAzure) creationWillWithAnErrorMatching(expectatio
 	return fmt.Errorf("unsupported `result` option '%s' in the Gherkin feature - use either 'Fail' or 'Succeed'", expectation)
 }
 
-func (state *EncryptionInFlightAzure) cSPProvideDetectiveMeasureForNonComplianceSecureTransferOnObjectStorage() error {
+func (state *EncryptionInFlightAzure) detectObjectStorageUnencryptedTransferAvailable() error {
+	return fmt.Errorf("azure policy prevent creation of object storage with in-secure transport making this test irrelevant")
+}
+
+func (state *EncryptionInFlightAzure) detectObjectStorageUnencryptedTransferEnabled() error {
 	return nil
 }
 
-func (state *EncryptionInFlightAzure) weExamineTheDetectiveMeasure() error {
+func (state *EncryptionInFlightAzure) createUnencryptedTransferObjectStorage() error {
 	return nil
 }
 
-func (state *EncryptionInFlightAzure) theDetectiveMeasureIsEnabled() error {
-	var policyAssignment azurePolicy.Assignment
-	var aerr error
-	// Search assignment from Management Group instead of subscription
-	if state.policyAssignmentMgmtGroup != "" {
-		policyAssignment, aerr = policy.GetAssignmentByManagementGroup(state.ctx, state.policyAssignmentMgmtGroup, policyName)
-	} else {
-		policyAssignment, aerr = policy.GetAssignmentBySubscription(state.ctx, azureutil.GetAzureSubscriptionID(), policyName)
-	}
+func (state *EncryptionInFlightAzure) detectsTheObjectStorage() error {
+	return nil
+}
 
-	if aerr != nil {
-		log.Printf("Get policy assignment error: %v", aerr)
-		return aerr
-	}
-
-	log.Printf("Policy assignment check: %v [Step PASSED]", *policyAssignment.Name)
+func (state *EncryptionInFlightAzure) unencryptedDataTrafficIsRemediated() error {
 	return nil
 }

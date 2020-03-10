@@ -8,55 +8,30 @@ import (
 	"citihub.com/compliance-as-code/internal/azureutil"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-04-01/storage"
-	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
-func getStorageAccountsClient() storage.AccountsClient {
-	storageAccountsClient := storage.NewAccountsClient(azureutil.GetAzureSubscriptionID())
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		storageAccountsClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return storageAccountsClient
-}
+// CreateWithNetworkRuleSet starts creation of a new Storage Account and waits for the account to be created.
+func CreateWithNetworkRuleSet(ctx context.Context, accountName, accountGroupName string, tags map[string]*string, httpsOnly bool, networkRuleSet *storage.NetworkRuleSet) (storage.Account, error) {
 
-// CreateStorageAccount starts creation of a new storage account and waits for
-// the account to be created.
-func CreateStorageAccount(ctx context.Context, accountName, accountGroupName string, tags map[string]*string) (storage.Account, error) {
-	return CreateStorageAccountWithHTTPSOption(ctx, accountName, accountGroupName, tags, true)
-}
+	var sa storage.Account
+	c := accountClient()
 
-// CreateStorageAccountWithHTTPSOption starts creation of a new storage account and waits for
-// the account to be created.
-func CreateStorageAccountWithHTTPSOption(ctx context.Context, accountName, accountGroupName string, tags map[string]*string, httpsOnly bool) (storage.Account, error) {
-	return CreateStorageAccountWithNetworkRuleSet(ctx, accountName, accountGroupName, tags, httpsOnly, &storage.NetworkRuleSet{})
-}
-
-// CreateStorageAccountWithNetworkRuleSet starts creation of a new storage account and waits for
-// the account to be created.
-func CreateStorageAccountWithNetworkRuleSet(ctx context.Context, accountName, accountGroupName string, tags map[string]*string, httpsOnly bool, networkRuleSet *storage.NetworkRuleSet) (storage.Account, error) {
-	var s storage.Account
-	storageAccountsClient := getStorageAccountsClient()
-
-	result, err := storageAccountsClient.CheckNameAvailability(
+	r, err := c.CheckNameAvailability(
 		ctx,
 		storage.AccountCheckNameAvailabilityParameters{
 			Name: to.StringPtr(accountName),
 			Type: to.StringPtr("Microsoft.Storage/storageAccounts"),
 		})
 	if err != nil {
-		return s, err
+		return sa, err
 	}
 
-	if *result.NameAvailable != true {
-		return s, fmt.Errorf(
-			"storage account name [%s] not available: %v\nserver message: %v",
-			accountName, err, *result.Message)
+	if *r.NameAvailable != true {
+		return sa, fmt.Errorf(
+			"storage account name [%sa] not available: %v\nserver message: %v",
+			accountName, err, *r.Message)
 	}
 
 	networkRuleSetParam := &storage.AccountPropertiesCreateParameters{
@@ -64,7 +39,7 @@ func CreateStorageAccountWithNetworkRuleSet(ctx context.Context, accountName, ac
 		NetworkRuleSet:         networkRuleSet,
 	}
 
-	future, err := storageAccountsClient.Create(
+	future, err := c.Create(
 		ctx,
 		accountGroupName,
 		accountName,
@@ -72,46 +47,48 @@ func CreateStorageAccountWithNetworkRuleSet(ctx context.Context, accountName, ac
 			Sku: &storage.Sku{
 				Name: storage.StandardLRS},
 			Kind:                              storage.Storage,
-			Location:                          to.StringPtr(azureutil.GetAzureLocation()),
+			Location:                          to.StringPtr(azureutil.Location()),
 			AccountPropertiesCreateParameters: networkRuleSetParam,
 			Tags:                              tags,
 		})
 
 	if err != nil {
-		return s, err
+		return sa, err
 	}
 
-	err = future.WaitForCompletionRef(ctx, storageAccountsClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
-		return s, err
+		return sa, err
 	}
 
-	return future.Result(storageAccountsClient)
+	return future.Result(c)
 }
 
-// DeleteStorageAccount deletes an existing storage account
-func DeleteStorageAccount(ctx context.Context, accountName, accountGroupName string) (autorest.Response, error) {
-	storageAccountsClient := getStorageAccountsClient()
-	return storageAccountsClient.Delete(ctx, accountGroupName, accountName)
+// AccountProperties returns the properties for the specified storage account including but not limited to name, SKU name, location, and account status
+func AccountProperties(ctx context.Context, rgName, accountName string) (storage.Account, error) {
+	return accountClient().GetProperties(ctx, rgName, accountName, "")
 }
 
-// GetAccountKeys gets the storage account keys
-func GetAccountKeys(ctx context.Context, accountName, accountGroupName string) (storage.AccountListKeysResult, error) {
-	accountsClient := getStorageAccountsClient()
-	return accountsClient.ListKeys(ctx, accountGroupName, accountName, "")
-}
-
-// GetAccountPrimaryKey return the primary key
-func GetAccountPrimaryKey(ctx context.Context, accountName, accountGroupName string) string {
-	response, err := GetAccountKeys(ctx, accountName, accountGroupName)
+// AccountPrimaryKey return the primary key
+func AccountPrimaryKey(ctx context.Context, accountName, accountGroupName string) string {
+	response, err := getAccountKeys(ctx, accountName, accountGroupName)
 	if err != nil {
 		log.Fatalf("failed to list keys: %v", err)
 	}
 	return *(((*response.Keys)[0]).Value)
 }
 
-// GetStorageAccountProperties - return the properties of the storageAccounts
-func GetStorageAccountProperties(ctx context.Context, resourceGroupName, accountName string) (storage.Account, error) {
-	accountsClient := getStorageAccountsClient()
-	return accountsClient.GetProperties(ctx, resourceGroupName, accountName, "")
+func getAccountKeys(ctx context.Context, accountName, accountGroupName string) (storage.AccountListKeysResult, error) {
+	return accountClient().ListKeys(ctx, accountGroupName, accountName, "")
+}
+
+func accountClient() storage.AccountsClient {
+	c := storage.NewAccountsClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Storage Account accountClient: %v", err)
+	}
+	return c
 }

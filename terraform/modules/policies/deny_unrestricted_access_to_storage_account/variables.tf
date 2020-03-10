@@ -22,3 +22,8 @@ variable "location" {
   description = "Azure location"
   type        = string
 }
+
+variable "whitelist_ips" {
+  description = "Whitelisted IPs"
+  type        = list(string)
+}

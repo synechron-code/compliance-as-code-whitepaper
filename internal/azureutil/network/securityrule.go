@@ -9,38 +9,35 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
 
-// Network Security Groups
+// CreateSecurityRule creates a new network security rule
+func CreateSecurityRule(ctx context.Context, nsgName string, nsrName string, parameters network.SecurityRule) (nsr network.SecurityRule, err error) {
+	c := nsrClient()
+	future, err := c.CreateOrUpdate(
+		ctx,
+		azureutil.ResourceGroup(),
+		nsgName,
+		nsrName,
+		parameters)
 
-func getNsrClient() network.SecurityRulesClient {
-	nsrClient := network.NewSecurityRulesClient(azureutil.GetAzureSubscriptionID())
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		nsrClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
+	if err != nil {
+		return nsr, err
 	}
 
-	return nsrClient
+	err = future.WaitForCompletionRef(ctx, c.Client)
+	if err != nil {
+		return nsr, err
+	}
+
+	return future.Result(c)
 }
 
-// CreateNetworkSecurityRule creates a new network security rule
-func CreateNetworkSecurityRule(ctx context.Context, networkSecurityGroupName string, securityRuleName string, securityRuleParameters network.SecurityRule) (nsr network.SecurityRule, err error) {
-	nsrClient := getNsrClient()
-	future, err := nsrClient.CreateOrUpdate(
-		ctx,
-		azureutil.GetAzureResourceGP(),
-		networkSecurityGroupName,
-		securityRuleName,
-		securityRuleParameters)
-
-	if err != nil {
-		return nsr, err
+func nsrClient() network.SecurityRulesClient {
+	c := network.NewSecurityRulesClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Security Rules client: %v", err)
 	}
-
-	err = future.WaitForCompletionRef(ctx, nsrClient.Client)
-	if err != nil {
-		return nsr, err
-	}
-
-	return future.Result(nsrClient)
+	return c
 }

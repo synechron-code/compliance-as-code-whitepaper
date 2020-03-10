@@ -1,3 +1,30 @@
+// container_registry_whitelisting
+variable "container_registry_whitelisting_exclusion" {
+  type        = map(list(string))
+  description = "exclusion for container_registry_whitelisting"
+  default = {
+    "dev"  = [],
+    "demo" = [],
+  }
+}
+
+output "container_registry_whitelisting_exclusion" {
+  value = var.container_registry_whitelisting_exclusion[var.env]
+}
+
+variable "audit_container_registry_whitelisting_exclusion" {
+  type        = map(list(string))
+  description = "exclusion for audit_container_registry_whitelisting"
+  default = {
+    "dev"  = [],
+    "demo" = [],
+  }
+}
+
+output "audit_container_registry_whitelisting_exclusion" {
+  value = var.audit_container_registry_whitelisting_exclusion[var.env]
+}
+
 // deny_http_storage
 variable "deny_http_storage_exclusion" {
   type        = map(list(string))

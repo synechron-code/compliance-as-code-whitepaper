@@ -11,32 +11,20 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
-func getIPClient() (ipClient network.PublicIPAddressesClient, err error) {
-	ipClient = network.NewPublicIPAddressesClient(azureutil.GetAzureSubscriptionID())
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		ipClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return
-}
-
 // CreatePublicIP creates a new public IP
 func CreatePublicIP(ctx context.Context, ipName string, tags map[string]*string) (ip network.PublicIPAddress, err error) {
-	ipClient, err := getIPClient()
+	c, err := ipClient()
 	if err != nil {
 		log.Fatalf("Unabled to get IPClient: %v", err)
 		return
 	}
-	future, err := ipClient.CreateOrUpdate(
+	future, err := c.CreateOrUpdate(
 		ctx,
-		azureutil.GetAzureResourceGP(),
+		azureutil.ResourceGroup(),
 		ipName,
 		network.PublicIPAddress{
 			Name:     to.StringPtr(ipName),
-			Location: to.StringPtr(azureutil.GetAzureLocation()),
+			Location: to.StringPtr(azureutil.Location()),
 			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
 				PublicIPAddressVersion:   network.IPv4,
 				PublicIPAllocationMethod: network.Static,
@@ -49,41 +37,51 @@ func CreatePublicIP(ctx context.Context, ipName string, tags map[string]*string)
 		return ip, fmt.Errorf("cannot create public ip address: %v", err)
 	}
 
-	err = future.WaitForCompletionRef(ctx, ipClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return ip, fmt.Errorf("cannot get public ip address create or update future response: %v", err)
 	}
 
-	return future.Result(ipClient)
+	return future.Result(c)
 }
 
 // DeletePublicIP deletes an existing public IP
 func DeletePublicIP(ctx context.Context, ipName string) error {
-	ipClient, err := getIPClient()
+	c, err := ipClient()
 	if err != nil {
 		log.Fatalf("Unabled to get IPClient: %v", err)
 		return err
 	}
-	future, err := ipClient.Delete(ctx, azureutil.GetAzureResourceGP(), ipName)
+	future, err := c.Delete(ctx, azureutil.ResourceGroup(), ipName)
 
 	if err != nil {
 		return fmt.Errorf("cannot delete public ip [ %v ] address: %v", ipName, err)
 	}
 
-	err = future.WaitForCompletionRef(ctx, ipClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return fmt.Errorf("cannot get delete ip address future response: %v", err)
 	}
-	log.Printf("%v publicIP should be deleted", ipName)
+	log.Printf("[DEBUG] %v publicIP should be deleted", ipName)
 	return nil
 }
 
-// GetPublicIP returns an existing public IP
-func GetPublicIP(ctx context.Context, ipName string) (publicIP network.PublicIPAddress, err error) {
-	ipClient, err := getIPClient()
+// PublicIP returns an existing Public IP by name from the Resource Group created during testing (a test Resource Group name in the form 'test[a-z]{6}resourceGP').
+func PublicIP(ctx context.Context, name string) (network.PublicIPAddress, error) {
+	c, err := ipClient()
 	if err != nil {
 		log.Fatalf("Unabled to get IPClient: %v", err)
 	}
-	publicIP, err = ipClient.Get(ctx, azureutil.GetAzureResourceGP(), ipName, "")
+	return c.Get(ctx, azureutil.ResourceGroup(), name, "")
+}
+
+func ipClient() (c network.PublicIPAddressesClient, err error) {
+	c = network.NewPublicIPAddressesClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Public IP Addresses client: %v", err)
+	}
 	return
 }

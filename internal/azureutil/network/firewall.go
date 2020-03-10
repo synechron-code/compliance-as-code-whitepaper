@@ -1,6 +1,7 @@
 package network
 
 import (
+	"citihub.com/compliance-as-code/internal/azureutil"
 	"context"
 	"log"
 
@@ -8,25 +9,24 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
 
-func getFwClient(subscriptionID string) (fwClient network.AzureFirewallsClient, err error) {
-	fwClient = network.NewAzureFirewallsClient(subscriptionID)
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
+// AzureFirewalls returns all Azure Firewall instances within the Subscription (configured by the AZURE_SUBSCRIPTION_ID environment variable).
+func AzureFirewalls(ctx context.Context) (network.AzureFirewallListResultIterator, error) {
+	c := fwClient()
+	log.Printf("[DEBUG] subscriptionID: %v", c.SubscriptionID)
+	r, err := c.ListAllComplete(ctx)
 	if err == nil {
-		fwClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
+		log.Println("[DEBUG] Successfully listed all FW in subscription")
 	}
-	return
+	return r, err
 }
 
-// ListAllAzureFirewall return all AzureFirewall within the subscription
-func ListAllAzureFirewall(ctx context.Context, fwSubscription string) (result network.AzureFirewallListResultIterator, err error) {
-	fwClient, err := getFwClient(fwSubscription)
-	log.Printf("subscriptionID: %v", fwClient.SubscriptionID)
-	result, err = fwClient.ListAllComplete(ctx)
+func fwClient() network.AzureFirewallsClient {
+	c := network.NewAzureFirewallsClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
 	if err == nil {
-		log.Println("Successfully listed all FW in subscription")
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Azure Firewall client: %v", err)
 	}
-	return
+	return c
 }

@@ -20,8 +20,7 @@ const (
 	awsSourceVpce = "aws:sourceVpce"
 )
 
-// AccessWhitelistingAWS Azure implementation of the encryption in flight for Object Storage feature
-type AccessWhitelistingAWS struct {
+type accessWhitelistingAWS struct {
 	ctx        context.Context
 	tags       map[string]*string
 	svc        *s3.S3
@@ -29,11 +28,10 @@ type AccessWhitelistingAWS struct {
 	bucketName string
 }
 
-func (state *AccessWhitelistingAWS) setup() {
-	log.Println("Setting up \"AccessWhitelistingAWS\"")
+func (state *accessWhitelistingAWS) setup() {
+	log.Println("[DEBUG] Setting up 'accessWhitelistingAWS'")
 	state.ctx = context.Background()
 
-	// Create Session
 	var err error
 	state.session, err = session.NewSession()
 	state.svc = s3.New(state.session)
@@ -42,40 +40,41 @@ func (state *AccessWhitelistingAWS) setup() {
 	}
 }
 
-func (state *AccessWhitelistingAWS) teardown() {
-	log.Println("Teardown completed")
+func (state *accessWhitelistingAWS) teardown() {
+	log.Println("[DEBUG] Teardown completed")
 }
 
-func (state *AccessWhitelistingAWS) checkPolicyAssigned() error {
-	return fmt.Errorf("AWS do not support preventative controls for access whitelisting on S3")
+func (state *accessWhitelistingAWS) checkPolicyAssigned() error {
+	return fmt.Errorf("AWS does not support preventative controls for access whitelisting on S3")
 }
 
-func (state *AccessWhitelistingAWS) prepareToCreateStorageContainer() error {
+func (state *accessWhitelistingAWS) provisionStorageContainer() error {
 	// Not supported
 	return nil
 }
 
-func (state *AccessWhitelistingAWS) createWithWhiteList(arg1 string) error {
+func (state *accessWhitelistingAWS) createWithWhitelist(arg1 string) error {
 	// Not supported
 	return nil
 }
 
-func (state *AccessWhitelistingAWS) creationWill(arg1 string) error {
+func (state *accessWhitelistingAWS) creationWill(arg1 string) error {
 	// Not supported
 	return nil
 }
 
-func (state *AccessWhitelistingAWS) isCspCapable() error {
+func (state *accessWhitelistingAWS) cspSupportsWhitelisting() error {
 	return nil
 }
 
-func (state *AccessWhitelistingAWS) examineStorageContainer(containerNameEnvVar string) error {
-	containerName := os.Getenv(containerNameEnvVar)
-	if containerName == "" {
+func (state *accessWhitelistingAWS) examineStorageContainer(containerNameEnvVar string) error {
+
+	name, b := os.LookupEnv(containerNameEnvVar)
+	if !b {
 		return fmt.Errorf("environment variable \"%s\" is not defined test can't run", containerNameEnvVar)
 	}
 
-	state.bucketName = containerName
+	state.bucketName = name
 
 	_, err := state.svc.HeadBucket(&s3.HeadBucketInput{
 		Bucket: aws.String(state.bucketName),
@@ -87,7 +86,7 @@ func (state *AccessWhitelistingAWS) examineStorageContainer(containerNameEnvVar 
 	return nil
 }
 
-func (state *AccessWhitelistingAWS) whitelistingIsConfigured() error {
+func (state *accessWhitelistingAWS) whitelistingIsConfigured() error {
 	result, err := state.svc.GetBucketPolicy(&s3.GetBucketPolicyInput{
 		Bucket: aws.String(state.bucketName),
 	})
@@ -96,6 +95,7 @@ func (state *AccessWhitelistingAWS) whitelistingIsConfigured() error {
 	}
 
 	var policyDoc citihubAws.PolicyDocument
+	log.Printf("[DEBUG] policy: %v", *result.Policy)
 	err = json.Unmarshal([]byte(*result.Policy), &policyDoc)
 	if err != nil {
 		log.Panicf("%v", err)
@@ -108,23 +108,25 @@ func (state *AccessWhitelistingAWS) whitelistingIsConfigured() error {
 				var conditionKey map[string]interface{}
 				conditionKey = conditionMap["StringNotEquals"].(map[string]interface{})
 				if conditionKey[awsSourceVpce] != nil {
-					log.Printf("%v: %v", awsSourceVpce, conditionKey[awsSourceVpce])
+					log.Printf("[DEBUG] %v: %v", awsSourceVpce, conditionKey[awsSourceVpce])
 					return nil
 				}
 				if conditionKey[awsSourceVpc] != nil {
-					log.Printf("%v: %v", awsSourceVpc, conditionKey[awsSourceVpc])
+					log.Printf("[DEBUG] %v: %v", awsSourceVpc, conditionKey[awsSourceVpc])
 					return nil
 				}
 			}
 			if conditionMap[notIPAddress] != nil {
-				log.Printf("%v: %v", notIPAddress, conditionMap[notIPAddress])
+				log.Printf("[DEBUG] %v: %v", notIPAddress, conditionMap[notIPAddress])
 				return nil
 			}
 		} else if *stmt.Effect == "Allow" {
-			conditionMap := *stmt.Condition
-			if conditionMap[ipAddress] != nil {
-				log.Printf("%v: %v", ipAddress, conditionMap[ipAddress])
-				return nil
+			if stmt.Condition != nil {
+				conditionMap := *stmt.Condition
+				if conditionMap[ipAddress] != nil {
+					log.Printf("[DEBUG] %v: %v", ipAddress, conditionMap[ipAddress])
+					return nil
+				}
 			}
 		}
 	}

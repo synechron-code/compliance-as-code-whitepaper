@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/colors"
+	"citihub.com/compliance-as-code/internal/logfilter"
+	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
 )
-
-const csp = "CSP"
 
 // EncryptionInFlight is an interface. For each CSP specific implementation
 type EncryptionInFlight interface {
@@ -21,9 +20,12 @@ type EncryptionInFlight interface {
 	httpAccessIs(arg1 string) error
 	httpsAccessIs(arg1 string) error
 	creationWillWithAnErrorMatching(result, errDescription string) error
-	cSPProvideDetectiveMeasureForNonComplianceSecureTransferOnObjectStorage() error
-	weExamineTheDetectiveMeasure() error
-	theDetectiveMeasureIsEnabled() error
+
+	detectObjectStorageUnencryptedTransferAvailable() error
+	detectObjectStorageUnencryptedTransferEnabled() error
+	createUnencryptedTransferObjectStorage() error
+	detectsTheObjectStorage() error
+	unencryptedDataTrafficIsRemediated() error
 	teardown()
 }
 
@@ -48,15 +50,17 @@ func TestMain(m *testing.M) {
 }
 
 func FeatureContext(s *godog.Suite) {
+	logfilter.Setup()
 	var state EncryptionInFlight
+	csp := os.Getenv("CSP")
 
-	cspEnv := os.Getenv(csp)
-	if strings.EqualFold(cspEnv, "azure") {
+	switch strings.ToLower(csp) {
+	case "azure":
 		state = &EncryptionInFlightAzure{}
-	} else if strings.EqualFold(cspEnv, "aws") {
+	case "aws":
 		state = &EncryptionInFlightAWS{}
-	} else {
-		log.Panicf("Environment variable %s is defined as \"%s\"", csp, cspEnv)
+	default:
+		log.Panicf("Environment variable CSP is defined as \"%s\"", csp)
 	}
 
 	s.BeforeSuite(state.setup)
@@ -67,9 +71,11 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^https access is "([^"]*)"$`, state.httpsAccessIs)
 	s.Step(`^creation will "([^"]*)" with an error matching "([^"]*)"$`, state.creationWillWithAnErrorMatching)
 
-	s.Step(`^the CSP provides a detective capability for unencrypted data transfer to Object Storage$`, state.cSPProvideDetectiveMeasureForNonComplianceSecureTransferOnObjectStorage)
-	s.Step(`^we examine the detective measure$`, state.weExamineTheDetectiveMeasure)
-	s.Step(`^the detective measure is enabled$`, state.theDetectiveMeasureIsEnabled)
+	s.Step(`^there is a detective capability for creation of Object Storage with unencrypted data transfer enabled$`, state.detectObjectStorageUnencryptedTransferAvailable)
+	s.Step(`^the capability for detecting the creation of Object Storage with unencrypted data transfer enabled is active$`, state.detectObjectStorageUnencryptedTransferEnabled)
+	s.Step(`^Object Storage is created with unencrypted data transfer enabled$`, state.createUnencryptedTransferObjectStorage)
+	s.Step(`^the detective capability detects the creation of Object Storage with unencrypted data transfer enabled$`, state.detectsTheObjectStorage)
+	s.Step(`^the detective capability disables unencrypted data traffic on the Object Storage Bucket$`, state.unencryptedDataTrafficIsRemediated)
 
 	s.AfterSuite(state.teardown)
 }

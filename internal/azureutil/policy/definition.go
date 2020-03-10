@@ -9,21 +9,18 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
 
-func getPolicyClient() policy.DefinitionsClient {
-	definitionClient := policy.NewDefinitionsClient(azureutil.GetAzureSubscriptionID())
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		definitionClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return definitionClient
+// DefinitionByName get a Policy Definition by name.
+func DefinitionByName(ctx context.Context, name string) (policy.Definition, error) {
+	return definitionClient().Get(ctx, name)
 }
 
-// GetPolicyDefinition - Get a Policy definition according to name
-func GetPolicyDefinition(ctx context.Context, policyDefinitionName string) (policy.Definition, error) {
-	definitionClient := getPolicyClient()
-
-	return definitionClient.Get(ctx, policyDefinitionName)
+func definitionClient() policy.DefinitionsClient {
+	c := policy.NewDefinitionsClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Policy Definition client: %v", err)
+	}
+	return c
 }

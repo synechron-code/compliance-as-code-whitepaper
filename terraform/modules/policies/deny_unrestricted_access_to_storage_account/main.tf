@@ -18,42 +18,9 @@ resource "azurerm_policy_definition" "deny_unrestricted_access_to_storage_accoun
     ]
   }
 
-  parameters = <<PARAMETERS
-  {
-    "effect": {
-        "type": "String",
-        "metadata": {
-          "displayName": "Effect",
-          "description": "Enable or disable the execution of the policy"
-        },
-        "allowedValues": [
-          "Deny",
-          "Audit",
-          "Disabled"
-        ],
-        "defaultValue": "Deny"
-      }
-  }
+  parameters = file("${path.module}/policy_parameters.json")
 
-  PARAMETERS
-
-  policy_rule = <<POLICY_RULE
-{
-    "if": {
-        "allOf": [{
-                "field": "type",
-                "equals": "Microsoft.Storage/storageAccounts"
-            }, {
-                "field": "Microsoft.Storage/storageAccounts/networkAcls.defaultAction",
-                "notequals": "Deny"
-            }
-        ]
-    },
-    "then": {
-        "effect": "[parameters('effect')]"
-    }
-}
-  POLICY_RULE
+  policy_rule = file("${path.module}/deny_unrestricted_access_to_storage_account.json")
 }
 
 // Policy Assignment
@@ -68,13 +35,15 @@ resource "azurerm_policy_assignment" "audit_storage_wo_net_acl" {
     type = "SystemAssigned"
   }
 
-  parameters = <<PARAMETERS
-  {
-    "effect": {
-      "value":"Audit"
-    }
-  }
-  PARAMETERS
+  parameters = jsonencode(
+    {
+      "effect" : {
+        value : "Audit"
+      },
+      allowedAddressRanges : {
+        "value" : var.whitelist_ips
+      }
+  })
 
   not_scopes = var.audit_exclusion_list
 }
@@ -90,13 +59,15 @@ resource "azurerm_policy_assignment" "deny_storage_wo_net_acl" {
     type = "SystemAssigned"
   }
 
-  parameters = <<PARAMETERS
-  {
-    "effect": {
-      "value":"Deny"
-    }
-  }
-  PARAMETERS
+  parameters = jsonencode(
+    {
+      "effect" : {
+        "value" : "Deny"
+      },
+      allowedAddressRanges : {
+        "value" : var.whitelist_ips
+      }
+  })
 
   not_scopes = var.deny_exclusion_list
 }

@@ -11,28 +11,17 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
-// Servers
+//Servers
 
-func getServersClient() sql.ServersClient {
-	serversClient := sql.NewServersClient(azureutil.GetAzureSubscriptionID())
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		serversClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return serversClient
-}
-
-// CreateServer creates a new SQL Server
-func CreateServer(ctx context.Context, resourceGPName, serverName, dbLogin, dbPassword string, tags map[string]*string) (server sql.Server, err error) {
-	serversClient := getServersClient()
-	future, err := serversClient.CreateOrUpdate(
+// CreateServer creates or updates a SQL Server instance and waits for request completion.
+func CreateServer(ctx context.Context, rgName, serverName, dbLogin, dbPassword string, tags map[string]*string) (server sql.Server, err error) {
+	c := serverClient()
+	future, err := c.CreateOrUpdate(
 		ctx,
-		resourceGPName,
+		rgName,
 		serverName,
 		sql.Server{
-			Location: to.StringPtr(azureutil.GetAzureLocation()),
+			Location: to.StringPtr(azureutil.Location()),
 			ServerProperties: &sql.ServerProperties{
 				AdministratorLogin:         to.StringPtr(dbLogin),
 				AdministratorLoginPassword: to.StringPtr(dbPassword),
@@ -44,81 +33,75 @@ func CreateServer(ctx context.Context, resourceGPName, serverName, dbLogin, dbPa
 		return server, err
 	}
 
-	err = future.WaitForCompletionRef(ctx, serversClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return server, err
 	}
 
-	return future.Result(serversClient)
+	return future.Result(c)
+}
+
+func serverClient() sql.ServersClient {
+	c := sql.NewServersClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise SQL Server client: %v", err)
+	}
+	return c
 }
 
 // Databases
 
-func getDbClient() sql.DatabasesClient {
-	dbClient := sql.NewDatabasesClient(azureutil.GetAzureSubscriptionID())
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		dbClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return dbClient
-}
-
-// CreateDB creates a new SQL Database on a given server
-func CreateDB(ctx context.Context, resourceGPName, serverName, dbName string) (db sql.Database, err error) {
-	dbClient := getDbClient()
-	future, err := dbClient.CreateOrUpdate(
+// CreateServer creates or updates a SQL Database instance on the given server and waits for request completion.
+func CreateDB(ctx context.Context, rgName, serverName, dbName string) (db sql.Database, err error) {
+	c := dbClient()
+	future, err := c.CreateOrUpdate(
 		ctx,
-		resourceGPName,
+		rgName,
 		serverName,
 		dbName,
 		sql.Database{
-			Location: to.StringPtr(azureutil.GetAzureLocation()),
+			Location: to.StringPtr(azureutil.Location()),
 		})
 	if err != nil {
 		return db, err
 	}
 
-	err = future.WaitForCompletionRef(ctx, dbClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return db, err
 	}
 
-	return future.Result(dbClient)
+	return future.Result(c)
 }
 
-// DeleteDB deletes an existing database from a server
-func DeleteDB(ctx context.Context, resourceGPName, serverName, dbName string) (autorest.Response, error) {
-	dbClient := getDbClient()
-	return dbClient.Delete(
-		ctx,
-		resourceGPName,
-		serverName,
-		dbName,
-	)
+// DeleteDB deletes an existing database from a server.
+func DeleteDB(ctx context.Context, rgName, serverName, dbName string) (autorest.Response, error) {
+	return dbClient().Delete(ctx, rgName, serverName, dbName)
+}
+
+func dbClient() sql.DatabasesClient {
+	c := sql.NewDatabasesClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise SQL Database client: %v", err)
+	}
+	return c
 }
 
 // Firewall rules
 
-func getFwRulesClient() sql.FirewallRulesClient {
-	fwrClient := sql.NewFirewallRulesClient(azureutil.GetAzureSubscriptionID())
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		fwrClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return fwrClient
-}
+// CreateFirewallRules creates or updates two SQL Firewall Rules (open to world and open to the Azure network)
+func CreateFirewallRules(ctx context.Context, rgName, serverName string) error {
+	c := fwRulesClient()
 
-// CreateFirewallRules creates new firewall rules for a given server
-func CreateFirewallRules(ctx context.Context, resourceGPName, serverName string) error {
-	fwrClient := getFwRulesClient()
-
-	_, err := fwrClient.CreateOrUpdate(
+	_, err := c.CreateOrUpdate(
 		ctx,
-		resourceGPName,
+		rgName,
 		serverName,
 		"unsafe open to world",
 		sql.FirewallRule{
@@ -132,9 +115,9 @@ func CreateFirewallRules(ctx context.Context, resourceGPName, serverName string)
 		return err
 	}
 
-	_, err = fwrClient.CreateOrUpdate(
+	_, err = c.CreateOrUpdate(
 		ctx,
-		resourceGPName,
+		rgName,
 		serverName,
 		"open to Azure internal",
 		sql.FirewallRule{
@@ -148,8 +131,13 @@ func CreateFirewallRules(ctx context.Context, resourceGPName, serverName string)
 	return err
 }
 
-// PrintInfo logs information on SQL user agent and ARM client
-func PrintInfo() {
-	log.Printf("user agent string: %s\n", sql.UserAgent())
-	log.Printf("SQL ARM Client version: %s\n", sql.Version())
+func fwRulesClient() sql.FirewallRulesClient {
+	c := sql.NewFirewallRulesClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise SQL Firewall client: %v", err)
+	}
+	return c
 }

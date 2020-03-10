@@ -1,8 +1,9 @@
 @intrusive_test
+@service.object_storage
+@network_access_control
+@CCO:CHC2-SVD030
 @csp.aws
 @csp.azure
-@service.object_storage
-@CHC2-SVD030
 Feature: Object Storage Network Access Control
   Ensure that 'Public access level' is set to Private for blob containers
 

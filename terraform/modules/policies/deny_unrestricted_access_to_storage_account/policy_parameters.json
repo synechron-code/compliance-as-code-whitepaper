@@ -1,0 +1,23 @@
+{
+  "effect": {
+    "type": "String",
+    "metadata": {
+      "displayName": "Effect",
+      "description": "Enable or disable the execution of the policy"
+    },
+    "allowedValues": [
+      "Deny",
+      "Audit",
+      "Disabled"
+    ],
+    "defaultValue": "Deny"
+  },
+  "allowedAddressRanges": {
+    "type": "Array",
+    "metadata": {
+      "displayName": "Address Range",
+      "description": "The list of allowed IP address ranges (Allowed internet address ranges can be provided using CIDR notation in the form 16.17.18.0/24 or as individual IP addresses like 16.17.18.19)"
+    },
+    "defaultValue": []
+  }
+}

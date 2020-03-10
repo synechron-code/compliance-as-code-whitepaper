@@ -10,32 +10,21 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
-func getNicClient() network.InterfacesClient {
-	nicClient := network.NewInterfacesClient(azureutil.GetAzureSubscriptionID())
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		nicClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return nicClient
-}
-
-// CreateNIC creates a new network interface. The Network Security Group is not a required parameter
+// CreateNIC creates a new network interface. The Network Security Group is not a required parameter.
 func CreateNIC(ctx context.Context, vnetName, subnetName, nsgName, ipName, nicName string, tags map[string]*string) (nic network.Interface, err error) {
 	subnet, err := GetVirtualNetworkSubnet(ctx, vnetName, subnetName)
 	if err != nil {
 		log.Fatalf("failed to get subnet: %v", err)
 	}
 
-	ip, err := GetPublicIP(ctx, ipName)
+	ip, err := PublicIP(ctx, ipName)
 	if err != nil {
 		log.Fatalf("failed to get ip address: %v", err)
 	}
 
 	nicParams := network.Interface{
 		Name:     to.StringPtr(nicName),
-		Location: to.StringPtr(azureutil.GetAzureLocation()),
+		Location: to.StringPtr(azureutil.Location()),
 		InterfacePropertiesFormat: &network.InterfacePropertiesFormat{
 			IPConfigurations: &[]network.InterfaceIPConfiguration{
 				{
@@ -52,35 +41,44 @@ func CreateNIC(ctx context.Context, vnetName, subnetName, nsgName, ipName, nicNa
 	}
 
 	if nsgName != "" {
-		nsg, err := GetNetworkSecurityGroup(ctx, nsgName)
+		nsg, err := SecurityGroup(ctx, nsgName)
 		if err != nil {
 			log.Fatalf("failed to get nsg: %v", err)
 		}
 		nicParams.NetworkSecurityGroup = &nsg
 	}
 
-	nicClient := getNicClient()
-	future, err := nicClient.CreateOrUpdate(ctx, azureutil.GetAzureResourceGP(), nicName, nicParams)
+	c := nicClient()
+	future, err := c.CreateOrUpdate(ctx, azureutil.ResourceGroup(), nicName, nicParams)
 	if err != nil {
 		return nic, err
 	}
 
-	err = future.WaitForCompletionRef(ctx, nicClient.Client)
+	err = future.WaitForCompletionRef(ctx, c.Client)
 	if err != nil {
 		return nic, err
 	}
 
-	return future.Result(nicClient)
+	return future.Result(c)
 }
 
-// GetNic returns an existing network interface
-func GetNic(ctx context.Context, nicName string) (network.Interface, error) {
-	nicClient := getNicClient()
-	return nicClient.Get(ctx, azureutil.GetAzureResourceGP(), nicName, "")
+// NIC returns an existing network interface by name
+func NIC(ctx context.Context, name string) (network.Interface, error) {
+	return nicClient().Get(ctx, azureutil.ResourceGroup(), name, "")
 }
 
-// DeleteNic deletes an existing network interface
-func DeleteNic(ctx context.Context, nic string) (result network.InterfacesDeleteFuture, err error) {
-	nicClient := getNicClient()
-	return nicClient.Delete(ctx, azureutil.GetAzureResourceGP(), nic)
+// DeleteNIC deletes an existing network interface by name.
+func DeleteNIC(ctx context.Context, name string) (network.InterfacesDeleteFuture, error) {
+	return nicClient().Delete(ctx, azureutil.ResourceGroup(), name)
+}
+
+func nicClient() network.InterfacesClient {
+	c := network.NewInterfacesClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Network Interfaces client: %v", err)
+	}
+	return c
 }

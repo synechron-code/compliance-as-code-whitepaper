@@ -1,6 +1,6 @@
 # Deny creating unrestricted network access storage account
 
-Deny unrestricted network access in your storage account firewall settings. Instead, configure network rules so only applications from allowed networks can access the storage account. To allow connections from specific internet or on-premise clients, access can be granted to traffic from specific Azure virtual networks or to public internet IP address ranges
+Deny unrestricted network access in your storage account firewall settings. Instead, configure network rules so only applications from allowed networks can access the storage account. To allow connections from specific internet or on-premise clients, access can be granted to traffic from specific Azure virtual networks or to public internet IP address ranges. This policy also check against a list of whitelisted IP address. Only those are allowed to be added in the storage account firewall.
 
 ## Cloud Controls Objectives
 
@@ -17,6 +17,7 @@ Prevent creating storage without proper proper network access control.
 ### Variables
 
 management_group_id : the management group Id that's the policy definition is created against.
+allowedAddressRanges : the IP address range that is allowed.
 
 ## Apply with Terraform
 

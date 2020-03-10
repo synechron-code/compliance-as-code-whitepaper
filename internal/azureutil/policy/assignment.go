@@ -9,30 +9,27 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
 
-func getAssignmentsClient() policy.AssignmentsClient {
-	assignmentsClient := policy.NewAssignmentsClient(azureutil.GetAzureSubscriptionID())
-	// create an authorizer from env vars or Azure Managed Service Identity
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		assignmentsClient.Authorizer = authorizer
-	} else {
-		log.Fatalf("Unable to get Authorization: %v", err)
-	}
-	return assignmentsClient
-}
-
-// GetAssignmentBySubscription - Get a Policy definition according to name
-func GetAssignmentBySubscription(ctx context.Context, subscriptionID, policyAssignmentName string) (policy.Assignment, error) {
-	assignmentsClient := getAssignmentsClient()
+// AssignmentBySubscription gets a Policy Assignment by Policy Assignment name, scoped to a Subscription.
+func AssignmentBySubscription(ctx context.Context, subscriptionID, name string) (policy.Assignment, error) {
 	scope := "/subscriptions/" + subscriptionID
-	log.Printf("Getting Policy Assignment with subscriptionID: %v", scope)
-	return assignmentsClient.Get(ctx, scope, policyAssignmentName)
+	log.Printf("[DEBUG] Getting Policy Assignment with subscriptionID: %v", scope)
+	return assignmentClient().Get(ctx, scope, name)
 }
 
-// GetAssignmentByManagementGroup - Get a Policy definition according to name in the management group
-func GetAssignmentByManagementGroup(ctx context.Context, managementGroup, policyAssignmentName string) (policy.Assignment, error) {
-	assignmentsClient := getAssignmentsClient()
+// AssignmentByManagementGroup gets a Policy Assignment by Policy Assignment name, scoped to a Managed Group.
+func AssignmentByManagementGroup(ctx context.Context, managementGroup, name string) (policy.Assignment, error) {
 	scope := "/providers/Microsoft.Management/managementGroups/" + managementGroup
-	log.Printf("Getting Policy Assignment with scope: %v", scope)
-	return assignmentsClient.Get(ctx, scope, policyAssignmentName)
+	log.Printf("[DEBUG] Getting Policy Assignment with scope: %v", scope)
+	return assignmentClient().Get(ctx, scope, name)
+}
+
+func assignmentClient() policy.AssignmentsClient {
+	c := policy.NewAssignmentsClient(azureutil.SubscriptionID())
+	a, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		c.Authorizer = a
+	} else {
+		log.Fatalf("Unable to authorise Policy Assignment client: %v", err)
+	}
+	return c
 }

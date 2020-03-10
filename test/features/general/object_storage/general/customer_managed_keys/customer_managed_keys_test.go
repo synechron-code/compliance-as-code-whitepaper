@@ -5,11 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DATA-DOG/godog"
-	"github.com/DATA-DOG/godog/colors"
+	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
 )
-
-const csp = "CSP"
 
 var opt = godog.Options{Output: colors.Colored(os.Stdout)}
 
@@ -22,7 +20,7 @@ func TestMain(m *testing.M) {
 	opt.Paths = flag.Args()
 
 	status := godog.RunWithOptions("encryption_at_rest", func(s *godog.Suite) {
-//		FeatureContext(s)
+		//		FeatureContext(s)
 	}, opt)
 
 	if st := m.Run(); st > status {

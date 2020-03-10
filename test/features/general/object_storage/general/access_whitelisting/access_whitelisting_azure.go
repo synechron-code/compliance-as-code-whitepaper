@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"citihub.com/compliance-as-code/internal/azureutil"
+	"citihub.com/compliance-as-code/internal/azureutil/group"
 	"citihub.com/compliance-as-code/internal/azureutil/policy"
-	"citihub.com/compliance-as-code/internal/azureutil/resource"
 	"citihub.com/compliance-as-code/internal/azureutil/storage"
 	azurePolicy "github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2019-01-01/policy"
 	azureStorage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-04-01/storage"
@@ -17,12 +17,10 @@ import (
 
 const (
 	policyAssignmentName = "deny_storage_wo_net_acl"
+	storageRgEnvVar      = "STORAGE_ACCOUNT_RESOURCE_GROUP"
 )
 
-const storageRgEnvVar = "STORAGE_ACCOUNT_RESOURCE_GROUP"
-
-// AccessWhitelistingAzure azure implementation of the encryption in flight for Object Storage feature
-type AccessWhitelistingAzure struct {
+type accessWhitelistingAzure struct {
 	ctx                       context.Context
 	policyAssignmentMgmtGroup string
 	tags                      map[string]*string
@@ -31,88 +29,91 @@ type AccessWhitelistingAzure struct {
 	runningErr                error
 }
 
-func (state *AccessWhitelistingAzure) setup() {
-	log.Println("Setting up \"AccessWhitelistingAzure\"")
+func (state *accessWhitelistingAzure) setup() {
+
+	log.Println("[DEBUG] Setting up 'accessWhitelistingAzure'")
 	state.ctx = context.Background()
-	state.policyAssignmentMgmtGroup = os.Getenv(azureutil.EnvPolicyAssignmentManagementGroup)
+
+	state.policyAssignmentMgmtGroup = os.Getenv(azureutil.PolicyAssignmentManagementGroup)
 	if state.policyAssignmentMgmtGroup == "" {
-		log.Printf("'%v' environment variable is not defined. Policy assignment check against subscription", azureutil.EnvPolicyAssignmentManagementGroup)
+		log.Printf("[ERROR] '%v' environment variable is not defined. Policy assignment check against subscription", azureutil.PolicyAssignmentManagementGroup)
 	}
 
 	state.tags = map[string]*string{
-		"project": to.StringPtr("gitlab-CICD"),
+		"project": to.StringPtr("CICD"),
 		"env":     to.StringPtr("test"),
 		"tier":    to.StringPtr("internal"),
 	}
 
-	_, err := resource.CreateGroupWithTags(state.ctx, azureutil.GetAzureResourceGP(), state.tags)
-
+	_, err := group.CreateWithTags(state.ctx, azureutil.ResourceGroup(), state.tags)
 	if err != nil {
 		log.Fatalf("failed to create group: %v\n", err.Error())
 	}
-	log.Printf("Created Resource Group: %v", azureutil.GetAzureResourceGP())
+
+	log.Printf("[DEBUG] Created Resource Group: %v", azureutil.ResourceGroup())
 }
 
-func (state *AccessWhitelistingAzure) teardown() {
-	err := resource.Cleanup(state.ctx)
+func (state *accessWhitelistingAzure) teardown() {
+	err := group.Cleanup(state.ctx)
 	if err != nil {
 		log.Fatalf("Failed to teardown: %v\n", err.Error())
 	}
-	log.Println("Teardown completed")
+	log.Println("[DEBUG] Teardown completed")
 }
 
-func (state *AccessWhitelistingAzure) checkPolicyAssigned() error {
-	var policyAssignment azurePolicy.Assignment
-	var aerr error
-	// Search assignment from Management Group instead of subscription
-	if state.policyAssignmentMgmtGroup != "" {
-		policyAssignment, aerr = policy.GetAssignmentByManagementGroup(state.ctx, state.policyAssignmentMgmtGroup, policyAssignmentName)
+func (state *accessWhitelistingAzure) checkPolicyAssigned() error {
+
+	var a azurePolicy.Assignment
+	var err error
+
+	// If a Management Group has not been set, check Policy Assignment at the Subscription
+	if state.policyAssignmentMgmtGroup == "" {
+		a, err = policy.AssignmentBySubscription(state.ctx, azureutil.SubscriptionID(), policyAssignmentName)
 	} else {
-		policyAssignment, aerr = policy.GetAssignmentBySubscription(state.ctx, azureutil.GetAzureSubscriptionID(), policyAssignmentName)
+		a, err = policy.AssignmentByManagementGroup(state.ctx, state.policyAssignmentMgmtGroup, policyAssignmentName)
 	}
 
-	if aerr != nil {
-		log.Printf("Get policy assignment error: %v", aerr)
-		return aerr
+	if err != nil {
+		log.Printf("[ERROR] Policy Assignment error: %v", err)
+		return err
 	}
 
-	log.Printf("Policy assignment check: %v [Step PASSED]", *policyAssignment.Name)
+	log.Printf("[DEBUG] Policy Assignment check: %v [Step PASSED]", *a.Name)
 	return nil
 }
 
-func (state *AccessWhitelistingAzure) prepareToCreateStorageContainer() error {
-	state.bucketName = azureutil.RandStringBytesMaskImprSrcUnsafe(10)
+func (state *accessWhitelistingAzure) provisionStorageContainer() error {
+	// define a bucket name, then pass the step - we will provision the account in the next step.
+	state.bucketName = azureutil.RandString(10)
 	return nil
 }
 
-func (state *AccessWhitelistingAzure) createWithWhiteList(ipRange string) error {
+func (state *accessWhitelistingAzure) createWithWhitelist(ipRange string) error {
 	var networkRuleSet azureStorage.NetworkRuleSet
 	if ipRange == "nil" {
 		networkRuleSet = azureStorage.NetworkRuleSet{
 			DefaultAction: azureStorage.DefaultActionAllow,
 		}
 	} else {
-		// ipRule := &azureStorage.IPRule{
-		// 	Action: azureStorage.Allow,
-		// 	IPAddressOrRange: to.StringPtr(ipRange),
-		// }
-		var ipRules *[]azureStorage.IPRule
+		ipRule := azureStorage.IPRule{
+			Action:           azureStorage.Allow,
+			IPAddressOrRange: to.StringPtr(ipRange),
+		}
 
 		networkRuleSet = azureStorage.NetworkRuleSet{
-			IPRules:       ipRules,
+			IPRules:       &[]azureStorage.IPRule{ipRule},
 			DefaultAction: azureStorage.DefaultActionDeny,
 		}
 	}
 
-	state.storageAccount, state.runningErr = storage.CreateStorageAccountWithNetworkRuleSet(state.ctx, state.bucketName, azureutil.GetAzureResourceGP(), state.tags, true, &networkRuleSet)
-
+	state.storageAccount, state.runningErr = storage.CreateWithNetworkRuleSet(state.ctx, state.bucketName, azureutil.ResourceGroup(), state.tags, true, &networkRuleSet)
 	return nil
 }
 
-func (state *AccessWhitelistingAzure) creationWill(result string) error {
-	if result == "Fail" {
+func (state *accessWhitelistingAzure) creationWill(expectation string) error {
+	if expectation == "Fail" {
 		if state.runningErr == nil {
-			return fmt.Errorf("incorrectly created storage account: %v", *state.storageAccount.ID)
+			return fmt.Errorf("incorrectly created Storage Account: %v", *state.storageAccount.ID)
 		}
 		return nil
 	}
@@ -120,14 +121,15 @@ func (state *AccessWhitelistingAzure) creationWill(result string) error {
 	if state.runningErr == nil {
 		return nil
 	}
+
 	return state.runningErr
 }
 
-func (state *AccessWhitelistingAzure) isCspCapable() error {
+func (state *accessWhitelistingAzure) cspSupportsWhitelisting() error {
 	return nil
 }
 
-func (state *AccessWhitelistingAzure) examineStorageContainer(containerNameEnvVar string) error {
+func (state *accessWhitelistingAzure) examineStorageContainer(containerNameEnvVar string) error {
 	accountName := os.Getenv(containerNameEnvVar)
 	if accountName == "" {
 		return fmt.Errorf("environment variable \"%s\" is not defined test can't run", containerNameEnvVar)
@@ -138,7 +140,7 @@ func (state *AccessWhitelistingAzure) examineStorageContainer(containerNameEnvVa
 		return fmt.Errorf("environment variable \"%s\" is not defined test can't run", storageRgEnvVar)
 	}
 
-	state.storageAccount, state.runningErr = storage.GetStorageAccountProperties(state.ctx, resourceGroup, accountName)
+	state.storageAccount, state.runningErr = storage.AccountProperties(state.ctx, resourceGroup, accountName)
 
 	if state.runningErr != nil {
 		return state.runningErr
@@ -151,28 +153,28 @@ func (state *AccessWhitelistingAzure) examineStorageContainer(containerNameEnvVa
 		return fmt.Errorf("%s has not configured with firewall network rule default action is not deny", accountName)
 	}
 
-	// Check if it has IP white listing
+	// Check if it has IP whitelisting
 	for _, ipRule := range *networkRuleSet.IPRules {
 		result = true
-		log.Printf("IP WhiteListing: %v, %v", *ipRule.IPAddressOrRange, ipRule.Action)
+		log.Printf("[DEBUG] IP WhiteListing: %v, %v", *ipRule.IPAddressOrRange, ipRule.Action)
 	}
 
-	// Check if it has private Endpoint white listing
+	// Check if it has private Endpoint whitelisting
 	for _, vnetRule := range *networkRuleSet.VirtualNetworkRules {
 		result = true
-		log.Printf("VNet whitelisting: %v, %v", *vnetRule.VirtualNetworkResourceID, vnetRule.Action)
+		log.Printf("[DEBUG] VNet whitelisting: %v, %v", *vnetRule.VirtualNetworkResourceID, vnetRule.Action)
 	}
 
 	// TODO: Private Endpoint implementation when it's GA
 
 	if result {
-		log.Printf("Whitelisting rule exist. [Step PASSED]")
+		log.Printf("[DEBUG] Whitelisting rule exists. [Step PASSED]")
 		return nil
 	}
 	return fmt.Errorf("no whitelisting has been defined for %v", accountName)
 }
 
-func (state *AccessWhitelistingAzure) whitelistingIsConfigured() error {
+func (state *accessWhitelistingAzure) whitelistingIsConfigured() error {
 	// Checked in previous step
 	return nil
 }
