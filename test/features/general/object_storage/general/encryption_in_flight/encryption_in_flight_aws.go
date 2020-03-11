@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	sslRequestOnly     = "s3-bucket-ssl-requests-only-AR"
+	sslRequestOnly     = "s3-bucket-ssl-requests-only"
 	awsSecureTransport = "aws:SecureTransport"
 	maxRetry           = 10
 	sleepTime          = 30 * time.Second
@@ -118,6 +118,9 @@ func (state *EncryptionInFlightAWS) detectsTheObjectStorage() error {
 			ConfigRuleName: aws.String(sslRequestOnly),
 			Limit:          aws.Int64(100),
 		})
+		if err != nil {
+			return err
+		}
 		a := resp.EvaluationResults
 		next := resp.NextToken
 		log.Printf("[DEBUG] nextToken: %v", resp.NextToken)
@@ -138,9 +141,7 @@ func (state *EncryptionInFlightAWS) detectsTheObjectStorage() error {
 			a = append(a, resp.EvaluationResults...)
 			next = resp.NextToken
 		}
-		if err != nil {
-			return err
-		}
+
 		resultCount := len(resp.EvaluationResults)
 		if resultCount > 0 {
 			log.Printf("[DEBUG] AWS Config Rule: \"%v\" evaluation results count: %v", sslRequestOnly, resultCount)
@@ -161,7 +162,7 @@ func (state *EncryptionInFlightAWS) detectsTheObjectStorage() error {
 }
 
 // Checking with a sleep and retry mechanism on the bucket being remediated to secure transport enabled
-func (state *EncryptionInFlightAWS) unencryptedDataTrafficIsRemediated() error {
+func (state *EncryptionInFlightAWS) encryptedDataTrafficIsEnforced() error {
 	for i := 0; i < maxRetry; i++ {
 		log.Printf("[DEBUG] Checking bucket policy for secure transport setting...")
 		err := state.checkIsSSLRequestOnly()
