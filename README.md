@@ -4,7 +4,7 @@
 
 ----
 
-The code in this repository supports the examples outlined in the Citihub Whitepaper *"Continuous Compliance as Code in the Cloud"*, available at [citihub.com/insights/whitepapers/](https://www.citihub.com/insights/whitepapers/).
+The code in this repository supports the examples outlined in the Citihub Whitepaper *"Continuous Compliance as Code in the Cloud"*, available at [https://www.citihub.com/insights/whitepapers/continuous-compliance-as-code-in-the-cloud-citihub-consulting/](https://www.citihub.com/insights/whitepapers/continuous-compliance-as-code-in-the-cloud-citihub-consulting/).
 
 ----
 
@@ -19,4 +19,4 @@ In this repository, we showcase some examples of an approach to compliance that 
 
 ## Support
 
-For more detail and more examples, or if you have questions, please [get in touch](enquiries@citihub.com).
+For more detail and more examples, or if you have questions, please [get in touch](mailto:enquiries@citihub.com).
