@@ -175,6 +175,6 @@ func (state *EncryptionInFlightAzure) detectsTheObjectStorage() error {
 	return nil
 }
 
-func (state *EncryptionInFlightAzure) unencryptedDataTrafficIsRemediated() error {
+func (state *EncryptionInFlightAzure) encryptedDataTrafficIsEnforced() error {
 	return nil
 }

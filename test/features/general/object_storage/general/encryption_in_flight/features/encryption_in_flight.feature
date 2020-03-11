@@ -28,9 +28,9 @@ Feature: Object Storage Encryption in Flight
         | disabled    | enabled      | Succeed |                                                       |
 
   @detective
-  Scenario: Delete Object Storage if Creation of Object Storage Without Encryption in Flight is Detected
+  Scenario: Remediate Object Storage if Creation of Object Storage Without Encryption in Flight is Detected
     Given there is a detective capability for creation of Object Storage with unencrypted data transfer enabled
     And the capability for detecting the creation of Object Storage with unencrypted data transfer enabled is active
     When Object Storage is created with unencrypted data transfer enabled
     Then the detective capability detects the creation of Object Storage with unencrypted data transfer enabled
-    And the detective capability disables unencrypted data traffic on the Object Storage Bucket
+    And the detective capability enforces encrypted data transfer on the Object Storage Bucket

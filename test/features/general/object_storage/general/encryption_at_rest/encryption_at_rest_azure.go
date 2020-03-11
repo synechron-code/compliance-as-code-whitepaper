@@ -8,6 +8,32 @@ import (
 type EncryptionAtRestAzure struct {
 }
 
+func (state *EncryptionAtRestAzure) securityControlsThatRestrictDataFromBeingUnencryptedAtRest() error {
+	// It is available
+	log.Printf("[DEBUG] Azure Storage account is encrypted by default and cannot be turned off. No test to run. Checking Azure Policy. (Unless customise this test to check for specific key usage.")
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) weProvisionAnObjectStorageBucket() error {
+	return nil
+}
+func (state *EncryptionAtRestAzure) encryptionAtRestIs(encryptionOption string) error {
+	return nil
+}
+func (state *EncryptionAtRestAzure) creationWillWithAnErrorMatching(result string) error {
+	return nil
+}
+
+func (state *EncryptionAtRestAzure) createContainerWithoutEncryption() error {
+	return nil
+}
+func (state *EncryptionAtRestAzure) detectiveDetectsNonCompliant() error {
+	return nil
+}
+func (state *EncryptionAtRestAzure) containerIsRemediated() error {
+	return nil
+}
+
 func (state *EncryptionAtRestAzure) setup() {
 }
 

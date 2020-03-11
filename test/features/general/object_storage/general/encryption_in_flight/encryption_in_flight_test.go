@@ -25,7 +25,7 @@ type EncryptionInFlight interface {
 	detectObjectStorageUnencryptedTransferEnabled() error
 	createUnencryptedTransferObjectStorage() error
 	detectsTheObjectStorage() error
-	unencryptedDataTrafficIsRemediated() error
+	encryptedDataTrafficIsEnforced() error
 	teardown()
 }
 
@@ -75,7 +75,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the capability for detecting the creation of Object Storage with unencrypted data transfer enabled is active$`, state.detectObjectStorageUnencryptedTransferEnabled)
 	s.Step(`^Object Storage is created with unencrypted data transfer enabled$`, state.createUnencryptedTransferObjectStorage)
 	s.Step(`^the detective capability detects the creation of Object Storage with unencrypted data transfer enabled$`, state.detectsTheObjectStorage)
-	s.Step(`^the detective capability disables unencrypted data traffic on the Object Storage Bucket$`, state.unencryptedDataTrafficIsRemediated)
+	s.Step(`^the detective capability enforces encrypted data transfer on the Object Storage Bucket$`, state.encryptedDataTrafficIsEnforced)
 
 	s.AfterSuite(state.teardown)
 }

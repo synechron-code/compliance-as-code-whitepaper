@@ -16,12 +16,17 @@ const csp = "CSP"
 // EncryptionAtRest is an interface. For each CSP specific implementation
 type EncryptionAtRest interface {
 	setup()
+	securityControlsThatRestrictDataFromBeingUnencryptedAtRest() error
+	weProvisionAnObjectStorageBucket() error
+	encryptionAtRestIs(encryptionOption string) error
+	creationWillWithAnErrorMatching(result string) error
 	policyOrRuleAvailable() error
 	checkPolicyOrRuleAssignment() error
 	policyOrRuleAssigned() error
 	prepareToCreateContainer() error
-	createContainerWithEncryptionOption(encryptionOption string) error
-	createResult(result string) error
+	createContainerWithoutEncryption() error
+	detectiveDetectsNonCompliant() error
+	containerIsRemediated() error
 	teardown()
 }
 
@@ -60,13 +65,16 @@ func FeatureContext(s *godog.Suite) {
 
 	s.BeforeSuite(state.setup)
 
-	s.Step(`^the CSP provides a detective capability for unencrypted Object Storage containers$`, state.policyOrRuleAvailable)
-	s.Step(`^we examine the detective measure$`, state.checkPolicyOrRuleAssignment)
-	s.Step(`^the detective measure is enabled$`, state.policyOrRuleAssigned)
-	s.Step(`^security controls that enforce data at rest encryption for Object Storage are applied$`, state.policyOrRuleAvailable)
-	s.Step(`^we provision an Object Storage container$`, state.prepareToCreateContainer)
-	s.Step(`^it is created with encryption option "([^"]*)"$`, state.createContainerWithEncryptionOption)
-	s.Step(`^creation will "([^"]*)"$`, state.createResult)
+	s.Step(`^security controls that restrict data from being unencrypted at rest$`, state.securityControlsThatRestrictDataFromBeingUnencryptedAtRest)
+	s.Step(`^we provision an Object Storage bucket$`, state.weProvisionAnObjectStorageBucket)
+	s.Step(`^encryption at rest is "([^"]*)"$`, state.encryptionAtRestIs)
+	s.Step(`^creation will "([^"]*)" with an error matching "([^"]*)"$`, state.creationWillWithAnErrorMatching)
 
+	s.Step(`^there is a detective capability for creation of Object Storage without encryption at rest$`, state.policyOrRuleAvailable)
+	s.Step(`^the capability for detecting the creation of Object Storage without encryption at rest is active$`, state.checkPolicyOrRuleAssignment)
+	s.Step(`^the detective measure is enabled$`, state.policyOrRuleAssigned)
+	s.Step(`^Object Storage is created with without encryption at rest$`, state.createContainerWithoutEncryption)
+	s.Step(`^the detective capability detects the creation of Object Storage without encryption at rest$`, state.detectiveDetectsNonCompliant)
+	s.Step(`^the detective capability enforces encryption at rest on the Object Storage Bucket$`, state.containerIsRemediated)
 	s.AfterSuite(state.teardown)
 }

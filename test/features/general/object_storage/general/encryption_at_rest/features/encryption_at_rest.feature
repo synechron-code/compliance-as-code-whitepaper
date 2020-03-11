@@ -14,20 +14,22 @@ Feature: Object Storage Encryption at Rest
 
   Rule: CHC2-AGP140 - Ensure cryptographic controls are in place to protect the confidentiality and integrity of data in-transit, stored, generated and processed in the cloud
 
-    @detective
-    Scenario: Ensure Detective Checks for Object Storage Encryption at Rest are Enabled, When Supported
-      Given the CSP provides a detective capability for unencrypted Object Storage containers
-      When we examine the detective measure
-      Then the detective measure is enabled
-
     @preventative
-    Scenario Outline: Prevent creation of Object Storage Without Encryption at Rest
-      Given security controls that enforce data at rest encryption for Object Storage are applied
-      When we provision an Object Storage container
-      And it is created with encryption option "<Encryption Option>"
-      Then creation will "<Result>"
+    Scenario Outline: Prevent Creation of Object Storage Without Encryption at Rest
+      Given security controls that restrict data from being unencrypted at rest
+      When we provision an Object Storage bucket
+      And encryption at rest is "<Encryption Option>"
+      Then creation will "<Result>" with an error matching "<Error Description>"
 
       Examples:
-        | Encryption Option | Result  |
-        | true              | Success |
-        | false             | Fail    |
+        | Encryption Option | Result  | Error Description                                     |
+        | enabled     | Fail    | Storage Buckets must not be created without encryption as rest enabled |
+        | disabled    | Succeed |                                                       |
+
+    @detective
+    Scenario: Detect creation of Object Storage Without Encryption at Rest
+      Given there is a detective capability for creation of Object Storage without encryption at rest
+      And the capability for detecting the creation of Object Storage without encryption at rest is active
+      When Object Storage is created with without encryption at rest
+      Then the detective capability detects the creation of Object Storage without encryption at rest
+      And the detective capability enforces encryption at rest on the Object Storage Bucket
