@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  ConfigRuleName:
+    Type: String
+    Description: 'Your name of the config rule'
+  RemediationActionName:
+    Type: String
+    Description: 'Name of the in-built remediation action'
+Resources:
+  RemediationAction:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName:
+        Ref: ConfigRuleName
+      ExecutionControls:
+        SsmControls:
+          ConcurrentExecutionRatePercentage: 70
+          ErrorPercentage: 70
+      MaximumAutomaticAttempts: 5
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !Join [ ':', [ "arn:aws:iam:", !Ref 'AWS::AccountId', "role/AmazonSSMAutomationRole" ] ]
+        S3BucketName:
+          ResourceValue:
+            Value: "RESOURCE_ID"
+      ResourceType: "AWS::S3::Bucket"
+      RetryAttemptSeconds: 60
+      TargetId:
+        Ref: RemediationActionName
+      TargetType: "SSM_DOCUMENT"
+      TargetVersion: "1"

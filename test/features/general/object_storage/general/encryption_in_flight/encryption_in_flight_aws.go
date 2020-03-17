@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	citihubAws "citihub.com/compliance-as-code/internal/aws"
@@ -19,7 +20,7 @@ const (
 	sslRequestOnly     = "s3-bucket-ssl-requests-only"
 	awsSecureTransport = "aws:SecureTransport"
 	maxRetry           = 10
-	sleepTime          = 30 * time.Second
+	sleepTime          = 60 * time.Second
 )
 
 // EncryptionInFlightAWS stores the context used for the Encryption in Flight test on AWS.
@@ -33,12 +34,13 @@ type EncryptionInFlightAWS struct {
 	configSvc   *configservice.ConfigService
 	bucketName  string
 	runningErr  error
+	region      string
 }
 
 func (state *EncryptionInFlightAWS) setup() {
 	log.Println("[DEBUG] Setting up \"EncryptionInFlightAWS\"")
 	state.ctx = context.Background()
-
+	state.region = os.Getenv("AWS_REGION")
 	// Create Session
 	var err error
 	state.session, err = session.NewSession()
@@ -99,7 +101,7 @@ func (state *EncryptionInFlightAWS) createUnencryptedTransferObjectStorage() err
 	resp, err := state.s3Svc.CreateBucket(&s3.CreateBucketInput{
 		Bucket: aws.String(state.bucketName),
 		CreateBucketConfiguration: &s3.CreateBucketConfiguration{
-			LocationConstraint: aws.String("ap-southeast-1"),
+			LocationConstraint: aws.String(state.region),
 		},
 	})
 

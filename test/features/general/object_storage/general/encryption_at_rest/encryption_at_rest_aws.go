@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"os"
 
 	"citihub.com/compliance-as-code/internal/azureutil"
 	"github.com/aws/aws-sdk-go/aws"
@@ -29,11 +30,13 @@ type EncryptionAtRestAWS struct {
 	bucketName       string
 	runningErr       error
 	setEncryptionErr error
+    region           string
 }
 
 func (state *EncryptionAtRestAWS) setup() {
 	log.Println("[DEBUG] Setting up \"EncryptionAtRestAWS\"")
 	state.ctx = context.Background()
+    state.region = os.Getenv("AWS_REGION")
 
 	// Create Session
 	var err error
@@ -104,7 +107,7 @@ func (state *EncryptionAtRestAWS) createContainerWithoutEncryption() error {
 	resp, err := state.s3Svc.CreateBucket(&s3.CreateBucketInput{
 		Bucket: aws.String(state.bucketName),
 		CreateBucketConfiguration: &s3.CreateBucketConfiguration{
-			LocationConstraint: aws.String("ap-southeast-1"),
+			LocationConstraint: aws.String(state.region),
 		},
 	})
 	log.Printf("[DEBUG] Created Bucket: %v", *resp.Location)

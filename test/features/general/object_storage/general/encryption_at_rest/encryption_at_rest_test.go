@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"citihub.com/compliance-as-code/internal/logfilter"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
 )
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) {
 }
 
 func FeatureContext(s *godog.Suite) {
+	logfilter.Setup()
 	var state EncryptionAtRest
 
 	cspEnv := strings.ToLower(os.Getenv(csp))

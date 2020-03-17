@@ -75,6 +75,7 @@ func (state *accessWhitelistingAWS) examineStorageContainer(containerNameEnvVar 
 	}
 
 	state.bucketName = name
+	log.Printf("[DEBUG] Trying to access bucket: '%s'", state.bucketName)
 
 	_, err := state.svc.HeadBucket(&s3.HeadBucketInput{
 		Bucket: aws.String(state.bucketName),

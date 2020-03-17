@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Id": "VPCe and SourceIP",
+  "Statement": [
+    {
+      "Sid": "VPCe and SourceIP",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*Object*",
+      "Resource": [
+        "arn:aws:s3:::bddipaddronlytest",
+        "arn:aws:s3:::bddipaddronlytest/*"
+      ],
+      "Condition": {
+        "StringNotLike": {
+          "aws:sourceVpce": [
+            "vpce-1111111",
+            "vpce-2222222"
+          ]
+        },
+        "NotIpAddress": {
+          "aws:SourceIp": [
+            "11.11.11.11/32",
+            "22.22.22.22/32"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "*",
+      "Resource": "arn:aws:s3:::bddipaddronlytest/*",
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
