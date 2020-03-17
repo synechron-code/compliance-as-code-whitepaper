@@ -16,7 +16,7 @@ In this repository, we showcase some examples of an approach to compliance that 
 1. Using [Terraform](https://www.terraform.io), deploy a clean-room infrastructure in which to test the controls
 1. Test the implementation of BDD features using [Cucumber](https://cucumber.io), specifically the [Godog](https://github.com/cucumber/godog) framework
 
-More implementation details can be found in [here](./features/general/object_storage/general)
+More implementation details can be found in [here](./test/features/general/object_storage/general)
 
 ## Support
 For more detail and more examples, or if you have questions, please [get in touch](mailto:enquiries@citihub.com).
