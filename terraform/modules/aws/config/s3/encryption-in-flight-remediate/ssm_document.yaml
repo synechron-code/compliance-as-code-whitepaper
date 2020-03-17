@@ -1,0 +1,117 @@
+description: |
+  # Citihub-set-S3-ssl-request-only
+  The will set a given S3 bucket to receive SSL request only.
+schemaVersion: '0.3'
+assumeRole: '{{AutomationAssumeRole}}'
+parameters:
+  S3BucketName:
+    type: String
+  AutomationAssumeRole:
+    type: String
+mainSteps:
+  - name: GetExistingPolicy
+    action: 'aws:executeAwsApi'
+    outputs:
+      - Name: existingPolicy
+        Selector: $.Policy
+        Type: String
+    inputs:
+      Service: s3
+      Api: GetBucketPolicy
+      Bucket: '{{S3BucketName}}'
+    isCritical: false
+    onFailure: 'step:NewPolicyWithSSL'
+    nextStep: MergeExistingPolicyWithSSL
+  - name: NewPolicyWithSSL
+    action: 'aws:executeScript'
+    inputs:
+      Runtime: PowerShell Core 6.0
+      Script: |-
+        $inputPayload = $env:InputPayload | ConvertFrom-Json
+        Write-Host $inputPayload
+        
+        $existingPolicy = @{
+          Version ="2012-10-17"
+          Statement = ""
+        }
+        
+        Write-Host $existingPolicy
+        $bucketName = $inputPayload.S3BucketName
+        $resource = "arn:aws:s3:::$bucketName/*"
+        $sslStatement =@{
+          Effect = "Deny"
+          Principal = "*"
+          Action = "*"
+          Resource = $resource
+          Condition=@{
+            Bool = @{
+              "aws:SecureTransport" = "false"
+            }
+          }
+        }
+        $existingPolicy.Statement = $sslStatement
+        $result = ($existingPolicy | ConvertTo-Json  -Depth 100)
+        Write-Host $result
+        return @{newPolicy= $result}
+      InputPayload:
+        S3BucketName: '{{S3BucketName}}'
+    outputs:
+      - Name: newPolicy
+        Selector: $.Payload.newPolicy
+        Type: String
+    isCritical: false
+    nextStep: ApplyNewSSLBucketPolicy
+  - name: MergeExistingPolicyWithSSL
+    action: 'aws:executeScript'
+    inputs:
+      Runtime: PowerShell Core 6.0
+      Script: |-
+        $inputPayload = $env:InputPayload | ConvertFrom-Json
+        Write-Host $inputPayload
+        $existingPolicy = $inputPayload.existing_policy | convertFrom-Json
+
+        Write-Host $existingPolicy
+        $bucketName = $inputPayload.S3BucketName
+        $resource = "arn:aws:s3:::$bucketName/*"
+        $sslStatement =@{
+          Effect = "Deny"
+          Principal = "*"
+          Action = "*"
+          Resource = $resource
+          Condition=@{
+            Bool = @{
+              "aws:SecureTransport" = "false"
+            }
+          }
+        }
+        $existingPolicy.Statement = $existingPolicy.Statement + $sslStatement
+        $result = ($existingPolicy | ConvertTo-Json  -Depth 100)
+        Write-Host $result
+        return @{newPolicy= $result}
+      InputPayload:
+        S3BucketName: '{{S3BucketName}}'
+        existing_policy: '{{GetExistingPolicy.existingPolicy}}'
+    outputs:
+      - Name: newPolicy
+        Selector: $.Payload.newPolicy
+        Type: String
+    isCritical: false
+    nextStep: ApplySSLBucketPolicy
+  - name: ApplyNewSSLBucketPolicy
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: s3
+      Api: PutBucketPolicy
+      Bucket: '{{S3BucketName}}'
+      Policy: '{{NewPolicyWithSSL.newPolicy}}'
+    isEnd: true
+    isCritical: true
+  - name: ApplySSLBucketPolicy
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: s3
+      Api: PutBucketPolicy
+      Bucket: '{{S3BucketName}}'
+      Policy: '{{MergeExistingPolicyWithSSL.newPolicy}}'
+    isEnd: true
+    isCritical: true
